@@ -1,0 +1,69 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  determine-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.changed-files.outputs.frontend_changed }}
+      backend_changed: ${{ steps.changed-files.outputs.backend_changed }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed-files
+        run: |
+          FRONTEND_CHANGED=false
+          BACKEND_CHANGED=false
+
+          git fetch origin ${{ github.event.pull_request.base.sha }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+
+          echo "Changed files: $CHANGED_FILES"
+
+          while IFS= read -r FILE; do
+            if [[ "$FILE" == frontend/* ]]; then
+              FRONTEND_CHANGED=true
+            elif [[ "$FILE" == backend/* ]]; then
+              BACKEND_CHANGED=true
+            fi
+          done < <(echo "$CHANGED_FILES")
+
+          echo "frontend_changed=$FRONTEND_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "backend_changed=$BACKEND_CHANGED" >> "$GITHUB_OUTPUT"
+
+
+  frontend-tests:
+    needs: determine-changes
+    if: needs.determine-changes.outputs.frontend_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Simulate random frontend test failure (50%)
+        run: |
+          if [[ $((RANDOM % 2)) -eq 0 ]]; then
+            echo "Simulating frontend test failure..."
+            exit 1
+          else
+            echo "Frontend tests simulated to pass."
+          fi
+
+
+  backend-tests:
+    needs: determine-changes
+    if: needs.determine-changes.outputs.backend_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Simulate random backend test failure (50%)
+        run: |
+          if [[ $((RANDOM % 2)) -eq 0 ]]; then
+            echo "Simulating backend test failure..."
+            exit 1
+          else
+            echo "Backend tests simulated to pass."
+          fi
